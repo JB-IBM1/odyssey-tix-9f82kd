@@ -6,10 +6,10 @@ import requests
 
 FILM_ID = "HO00000547"
 SITE_ID = "IMAX"
-START_DATE = date(2026, 8, 1)
+START_DATE = date.today()
 END_DATE = date(2026, 9, 14)
 STATE_FILE = "last_state.json"
-NOTIFY_URL = os.environ.get("NOTIFY_URL", "https://ntfy.sh/odyssey-tix-9f82kd")
+NOTIFY_URL = os.environ.get("NOTIFY_URL", "https://ntfy.sh/your-topic-name")
 
 # Minimum delay (ms) between requests so we're not hammering the site
 REQUEST_DELAY_MS = 1500
@@ -39,6 +39,8 @@ def fetch_all_days():
             ):
                 captured_headers.update(request.headers)
 
+        all_request_urls = []
+        page.on("request", lambda r: all_request_urls.append(r.url))
         page.on("request", handle_request)
 
         # Load the real films page - this is what triggers the app's own
@@ -47,11 +49,32 @@ def fetch_all_days():
         page.wait_for_timeout(2000)  # small buffer in case the call is slightly delayed
 
         if "authorization" not in {k.lower() for k in captured_headers}:
+            # Gather diagnostics before giving up, so we know WHY it failed
+            # instead of guessing (Cloudflare block page? no showtimes call
+            # fired at all? wrong request pattern?).
+            page_title = page.title()
+            body_snippet = page.inner_text("body")[:500]
+            screenshot_path = "failure_screenshot.png"
+            page.screenshot(path=screenshot_path, full_page=True)
+
+            showtimes_related = [
+                u for u in all_request_urls if "showtimes" in u or "ocapi" in u
+            ]
+
+            print("=== DEBUG: page title ===")
+            print(page_title)
+            print("=== DEBUG: first 500 chars of page body text ===")
+            print(body_snippet)
+            print("=== DEBUG: requests containing 'showtimes' or 'ocapi' ===")
+            print(showtimes_related if showtimes_related else "(none seen at all)")
+            print(f"=== DEBUG: screenshot saved to {screenshot_path} ===")
+
             browser.close()
             raise RuntimeError(
                 "Could not capture an Authorization header from the films page. "
-                "The page structure or app behaviour may have changed - "
-                "re-check DevTools on " + FILMS_PAGE_URL
+                "Check the DEBUG output above and the uploaded screenshot artifact "
+                "to see what actually loaded (Cloudflare challenge page? "
+                "no showtimes request fired at all?)."
             )
 
         auth_header = next(
@@ -135,7 +158,7 @@ def main():
     else:
         for day_str, data in all_days.items():
             # Uncomment once to confirm the real field names for your response shape:
-            print(json.dumps(data, indent=2))
+            # print(json.dumps(data, indent=2))
             sessions = data.get("Showtimes", data.get("showtimes", []))
             for session in sessions:
                 session_id = session.get("Id") or session.get("id")
