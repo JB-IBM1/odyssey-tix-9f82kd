@@ -6,7 +6,7 @@ import requests
 
 FILM_ID = "HO00000547"
 SITE_ID = "IMAX"
-START_DATE = date.(2026, 8, 1)
+START_DATE = date(2026, 8, 1)
 END_DATE = date(2026, 9, 14)
 STATE_FILE = "last_state.json"
 NOTIFY_URL = os.environ.get("NOTIFY_URL", "https://ntfy.sh/odyssey-tix-9f82kd")
