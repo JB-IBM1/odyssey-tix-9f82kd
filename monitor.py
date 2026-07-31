@@ -112,7 +112,7 @@ def main():
     else:
         for day_str, data in all_days.items():
             # Uncomment once to confirm the real field names for your response shape:
-            # print(json.dumps(data, indent=2))
+            print(json.dumps(data, indent=2))
             sessions = data.get("Showtimes", data.get("showtimes", []))
             for session in sessions:
                 session_id = session.get("Id") or session.get("id")
