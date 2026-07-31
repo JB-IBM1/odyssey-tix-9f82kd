@@ -75,9 +75,14 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
-def notify(message):
+def notify(message, priority=None):
     try:
-        requests.post(NOTIFY_URL, data=message.encode("utf-8"), timeout=10)
+        headers = {"Title": "Odyssey ticket monitor"}
+        if priority:
+            headers["Priority"] = priority
+        requests.post(
+            NOTIFY_URL, data=message.encode("utf-8"), headers=headers, timeout=10
+        )
     except Exception as e:
         print(f"Notify failed: {e}")
 
@@ -85,32 +90,55 @@ def notify(message):
 def main():
     last_state = load_last_state()
     new_state = {}
-    changes = []
+    increases = []
 
-    all_days = fetch_all_days()
-    for day_str, data in all_days.items():
-        # Uncomment once to confirm the real field names for your response shape:
-        # print(json.dumps(data, indent=2))
-        sessions = data.get("Showtimes", data.get("showtimes", []))
-        for session in sessions:
-            session_id = session.get("Id") or session.get("id")
-            seats_now = session.get("SeatsAvailable", session.get("seats_available"))
-            key = f"{day_str}:{session_id}"
-            new_state[key] = seats_now
+    try:
+        all_days = fetch_all_days()
+    except Exception as e:
+        # Something broke badly enough that we couldn't even try each day
+        # (browser launch failure, network error establishing the session, etc.)
+        notify(f"Monitor run FAILED: {e}", priority="high")
+        raise  # also fail the GitHub Actions run so it shows up as a red X
 
-            seats_before = last_state.get(key)
-            if seats_before is not None and seats_now != seats_before:
-                changes.append(
-                    f"{day_str} session {session_id}: {seats_before} -> {seats_now} seats"
-                )
-
-    if changes:
-        notify("Odyssey availability changes:\n" + "\n".join(changes))
-        print("\n".join(changes))
+    if not all_days:
+        # We looped through every day but captured zero responses - almost
+        # certainly means auth/cookies broke or Cloudflare blocked the runner,
+        # not that there's genuinely nothing to report.
+        notify(
+            "Monitor run captured NO showtime data for any day - "
+            "likely an auth/blocking issue, not an empty schedule. Check the Actions log.",
+            priority="high",
+        )
     else:
-        print("No changes detected.")
+        for day_str, data in all_days.items():
+            # Uncomment once to confirm the real field names for your response shape:
+            # print(json.dumps(data, indent=2))
+            sessions = data.get("Showtimes", data.get("showtimes", []))
+            for session in sessions:
+                session_id = session.get("Id") or session.get("id")
+                seats_now = session.get("SeatsAvailable", session.get("seats_available"))
+                key = f"{day_str}:{session_id}"
+                new_state[key] = seats_now
 
-    save_state(new_state)
+                seats_before = last_state.get(key)
+                # Only notify when seats went UP - a drop just means someone
+                # else booked, which isn't actionable for you.
+                if (
+                    seats_before is not None
+                    and seats_now is not None
+                    and seats_now > seats_before
+                ):
+                    increases.append(
+                        f"{day_str} session {session_id}: {seats_before} -> {seats_now} seats"
+                    )
+
+        if increases:
+            notify("Odyssey seats opened up:\n" + "\n".join(increases), priority="high")
+            print("\n".join(increases))
+        else:
+            print("No new seats detected.")
+
+        save_state(new_state)
 
 
 if __name__ == "__main__":
