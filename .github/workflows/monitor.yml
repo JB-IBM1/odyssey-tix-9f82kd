@@ -2,8 +2,8 @@ name: Odyssey Ticket Monitor
 
 on:
   schedule:
-    # Runs every hour, at minute 0. Adjust freely — every 30-60 min is plenty.
-    - cron: "0 * * * *"
+    # Runs every hour, at minute 36. Adjust freely — every 30-60 min is plenty.
+    - cron: "36 * * * *"
   workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab
 
 permissions:
