@@ -1,0 +1,40 @@
+name: Odyssey Ticket Monitor
+
+on:
+  schedule:
+    # Runs every hour, at minute 0. Adjust freely — every 30-60 min is plenty.
+    - cron: "0 * * * *"
+  workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write  # needed so the workflow can commit last_state.json back
+
+jobs:
+  check-availability:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install playwright requests
+          playwright install --with-deps chromium
+
+      - name: Run monitor
+        env:
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+        run: python monitor.py
+
+      - name: Commit updated state file
+        run: |
+          git config user.name "odyssey-ticket-monitor"
+          git config user.email "[email protected]"
+          git add last_state.json
+          git diff --quiet --cached || git commit -m "Update ticket availability state [skip ci]"
+          git push
