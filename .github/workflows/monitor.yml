@@ -2,7 +2,7 @@ name: Odyssey Ticket Monitor
 
 on:
   schedule:
-    # Runs every hour, at minute 36. Adjust freely — every 30-60 min is plenty.
+    # Runs every hour, at minute 0. Adjust freely — every 30-60 min is plenty.
     - cron: "0 * * * *"
   workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab
 
@@ -30,6 +30,14 @@ jobs:
         env:
           NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
         run: python monitor.py
+
+      - name: Upload debug screenshot on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-screenshot
+          path: failure_screenshot.png
+          if-no-files-found: ignore
 
       - name: Commit updated state file
         run: |
